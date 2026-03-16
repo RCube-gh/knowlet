@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+.env
+
+# SQLite Database (Crucial for Public Repo!)
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# AI Agent Context
+.agent/
+.gemini/
+
+# Static Uploads (Images pasted by user)
+web_app/static/uploads/*
+!web_app/static/uploads/.gitkeep
+
+# IDEs
+.vscode/
+.idea/
+.DS_Store
+
+# Temporary files
+/tmp/

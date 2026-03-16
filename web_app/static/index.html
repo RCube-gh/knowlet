@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Knowlet 🌸</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    
+    <!-- Highlight.js for Code Syntax Highlighting (Github Light Theme) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+</head>
+<body>
+    <!-- Header with Hamburger -->
+    <header class="header-bar">
+        <button id="menu-btn" class="menu-btn">☰</button>
+        <div class="header-title">Knowlet 🌸</div>
+    </header>
+
+    <!-- Sidebar Overlay -->
+    <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+    <div class="app-container">
+        <!-- Sidebar Navigation (Drawer) -->
+        <aside id="sidebar" class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <h1>Menu</h1>
+                </div>
+                <button id="close-menu-btn" class="menu-btn close-btn">&times;</button>
+            </div>
+            
+            <nav class="nav-menu">
+                <button class="nav-btn active" data-target="tab-stack">📝 Stack</button>
+                <button class="nav-btn" data-target="tab-search">🔍 Search</button>
+                <button class="nav-btn" data-target="tab-stats">📊 Stats</button>
+                <button class="nav-btn" data-target="tab-settings">⚙️ Settings</button>
+            </nav>
+        </aside>
+
+        <!-- Main Content (Tabs) -->
+        <main class="main-content">
+            
+            <!-- 1. STACK TAB (Input only) -->
+            <section id="tab-stack" class="tab-content active">
+                <div class="input-card center-large">
+                    <div class="input-header">
+                        <h2>Stack new knowledge</h2>
+                        <span class="hint">Press <b>Alt+Enter</b> to stack</span>
+                    </div>
+                    <div class="input-row">
+                        <input type="text" id="input-title" placeholder="Title (Optional)" class="large-input">
+                        <div id="title-duplicate-warning" class="duplicate-warning hidden"></div>
+                        <div class="tags-container" id="tags-container">
+                            <div id="selected-tags" style="display:flex;gap:5px;flex-wrap:wrap;"></div>
+                            <div class="tag-input-wrapper">
+                                <input type="text" id="input-tags" placeholder="Tags..." autocomplete="off">
+                                <div id="tag-suggestions" class="suggestions-box hidden"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <textarea id="input-content" placeholder="Content... (Optional if title is provided)" class="large-textarea"></textarea>
+                    
+                    <div class="actions">
+                        <button id="btn-stack" class="btn-primary-large">Stack 💖</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 2. SEARCH TAB (History & Filters) -->
+            <section id="tab-search" class="tab-content">
+                <div class="filters-area-horizontal">
+                    <div class="search-box">
+                        <input type="text" id="search-input" placeholder="Search knowledge...">
+                    </div>
+                    <button id="btn-export" class="btn-secondary">Export CSV</button>
+                </div>
+                
+                <div class="search-split-layout">
+                    <!-- Left Column: Master List -->
+                    <div class="search-list-column">
+                        <div class="timeline-header">
+                            <h2>Found <span id="search-count">0</span> Stacks</h2>
+                        </div>
+                        <div class="notes-list" id="notes-list">
+                            <!-- Notes injected by JS -->
+                        </div>
+                    </div>
+                    
+                    <!-- Right Column: Detail View -->
+                    <div class="search-detail-column">
+                        <div id="detail-empty" class="detail-empty">
+                            <p>Select a stack from the list to view details 🌸</p>
+                        </div>
+                        <div id="detail-content" class="detail-content hidden">
+                            <div class="detail-header">
+                                <div class="detail-header-text">
+                                    <h2 id="detail-title" class="note-title"></h2>
+                                    <input type="text" id="edit-title" class="seamless-input hidden" placeholder="Title">
+                                    <span id="detail-date" class="note-date"></span>
+                                </div>
+                                <div class="detail-header-actions">
+                                    <button id="btn-edit" class="btn-secondary small-btn">✏️ Edit</button>
+                                    <div id="edit-actions-inline" class="hidden" style="display: flex; gap: 8px;">
+                                        <button id="btn-cancel-edit" class="btn-secondary small-btn">Cancel</button>
+                                        <button id="btn-save-edit" class="btn-primary small-btn">💾 Save</button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div id="detail-tags" class="note-tags"></div>
+                            
+                            <!-- Seamless Tag Editor Container -->
+                            <div id="edit-tags-container" class="hidden">
+                                <div class="tags-container" style="flex: none; width: 100%;">
+                                    <div id="edit-selected-tags" style="display:flex;gap:5px;flex-wrap:wrap;"></div>
+                                    <div class="tag-input-wrapper">
+                                        <input type="text" id="edit-input-tags" placeholder="Add tag..." autocomplete="off">
+                                        <div id="edit-tag-suggestions" class="suggestions-box hidden"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Viewer Mode -->
+                            <div id="detail-viewer" class="detail-body">
+                                <div id="detail-text" class="markdown-body"></div>
+                            </div>
+                            
+                            <!-- Editor Mode -->
+                            <div id="detail-editor" class="detail-body hidden" style="display: flex; flex-direction: column;">
+                                <textarea id="edit-content" class="seamless-textarea" placeholder="Markdown supported!"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 3. STATS TAB (Heatmap etc.) -->
+            <section id="tab-stats" class="tab-content">
+                <div class="stats-card">
+                    <h2>Your Progress</h2>
+                    <div class="stats-area-large">
+                        <div class="stat-box">
+                            <p>Today's Stack</p>
+                            <h2 id="today-count">0</h2>
+                        </div>
+                        <div class="stat-box">
+                            <p>Total Stack</p>
+                            <h2 id="total-count">0</h2>
+                        </div>
+                        <div class="stat-box">
+                            <p>Current Streak</p>
+                            <h2 id="streak-count">0</h2>
+                        </div>
+                    </div>
+                    
+                    <div class="heatmap-container">
+                        <h3>Stack Heatmap</h3>
+                        <div class="heatmap" id="heatmap">
+                            <!-- Heatmap injected by JS -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 4. SETTINGS TAB (Tag Management) -->
+            <section id="tab-settings" class="tab-content">
+                <div class="settings-card">
+                    <h2>Settings ⚙️</h2>
+                    <div class="settings-section">
+                        <h3>Tag Management</h3>
+                        <p class="settings-desc">View and delete unused or incorrect tags. Deleting a tag will completely remove it from all stacks.</p>
+                        <div id="settings-tags-list" class="settings-tags-list">
+                            <!-- Tags populated by JS -->
+                        </div>
+                    </div>
+                    
+                    <div class="settings-divider"></div>
+                    
+                    <div class="settings-section">
+                        <h3>Cloud Sync (GitHub) ☁️</h3>
+                        <p class="settings-desc">Backup your stacks to a private GitHub repository as JSON. You'll need a <a href="https://github.com/settings/tokens" target="_blank">Personal Access Token (classic)</a> with <code>repo</code> scope.</p>
+                        
+                        <div class="settings-group">
+                            <label>GitHub Personal Access Token</label>
+                            <input type="password" id="setting-github-token" placeholder="ghp_xxxxxxxxxxxx" class="settings-input">
+                        </div>
+                        
+                        <div class="settings-group">
+                            <label>Repository (username/repo)</label>
+                            <input type="text" id="setting-github-repo" placeholder="moca/my-backups" class="settings-input">
+                        </div>
+                        
+                        <div class="settings-actions">
+                            <button id="btn-save-sync-settings" class="btn-secondary">Save Sync Settings</button>
+                        </div>
+
+                        <div class="sync-ops">
+                            <button id="btn-sync-push" class="btn-primary">📤 Push to GitHub</button>
+                            <button id="btn-sync-pull" class="btn-secondary-outline">📥 Pull from GitHub</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- Global Toast -->
+    <div id="app-toast" class="toast hidden"></div>
+
+    <!-- Include Marked.js for Markdown parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    
+    <!-- KaTeX for Math Formulas -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked-katex-extension/lib/index.umd.js"></script>
+    
+    <script src="/static/script.js"></script>
+</body>
+</html>
