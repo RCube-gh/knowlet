@@ -6,6 +6,7 @@
     <title>Knowlet 🌸</title>
     <link rel="stylesheet" href="/static/style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
     
     <!-- Highlight.js for Code Syntax Highlighting (Github Light Theme) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
@@ -53,7 +54,7 @@
                         <input type="text" id="input-title" placeholder="Title (Optional)" class="large-input">
                         <div id="title-duplicate-warning" class="duplicate-warning hidden"></div>
                         <div class="tags-container" id="tags-container">
-                            <div id="selected-tags" style="display:flex;gap:5px;flex-wrap:wrap;"></div>
+                            <div id="selected-tags"></div>
                             <div class="tag-input-wrapper">
                                 <input type="text" id="input-tags" placeholder="Tags..." autocomplete="off">
                                 <div id="tag-suggestions" class="suggestions-box hidden"></div>
@@ -79,7 +80,18 @@
                         <button id="view-grid" class="view-btn" title="Grid View">🗂️</button>
                         <button id="view-focus" class="view-btn" title="Focus View">🔍</button>
                     </div>
-                    <button id="btn-export" class="btn-secondary">Export CSV</button>
+                    <button id="btn-toggle-select" class="btn-secondary" title="Enter Selection Mode">Select</button>
+
+                    <!-- Grid Zoom Slider -->
+                    <div id="grid-zoom-container" class="grid-zoom-container hidden">
+                        <span>Small</span>
+                        <input type="range" id="grid-zoom-slider" min="150" max="500" value="280">
+                        <span>Large</span>
+                    </div>
+
+                    <div class="search-actions">
+                        <button id="btn-export" class="btn-secondary">Export CSV</button>
+                    </div>
                 </div>
                 
                 <div class="search-split-layout">
@@ -120,7 +132,7 @@
                             <!-- Seamless Tag Editor Container -->
                             <div id="edit-tags-container" class="hidden">
                                 <div class="tags-container" style="flex: none; width: 100%;">
-                                    <div id="edit-selected-tags" style="display:flex;gap:5px;flex-wrap:wrap;"></div>
+                                    <div id="edit-selected-tags"></div>
                                     <div class="tag-input-wrapper">
                                         <input type="text" id="edit-input-tags" placeholder="Add tag..." autocomplete="off">
                                         <div id="edit-tag-suggestions" class="suggestions-box hidden"></div>
@@ -202,6 +214,27 @@
                             <button id="btn-save-sync-settings" class="btn-secondary">Save Sync Settings</button>
                         </div>
 
+                        <div class="sync-dashboard">
+                            <div class="sync-status-header">
+                                <span class="settings-desc" style="margin:0;">Archive Status</span>
+                                <div class="sync-badges">
+                                    <span id="sync-badge" class="status-badge hidden">0</span>
+                                    <span id="sync-total-badge" class="status-badge-outline">0 total stacks</span>
+                                </div>
+                            </div>
+                            <div class="sync-progress-wrapper">
+                                <div class="sync-progress-track">
+                                    <div id="sync-progress" class="sync-progress-fill" style="width: 0%"></div>
+                                </div>
+                                <div class="sync-progress-text">
+                                    <span id="sync-count-text">0 items pending (Threshold: 50)</span>
+                                </div>
+                            </div>
+                            <div id="sync-info-meta" class="sync-info-meta">
+                                <!-- Last success/error info injected here -->
+                            </div>
+                        </div>
+
                         <div class="sync-ops">
                             <button id="btn-sync-push" class="btn-primary">📤 Push to GitHub</button>
                             <button id="btn-sync-pull" class="btn-secondary-outline">📥 Pull from GitHub</button>
@@ -211,6 +244,39 @@
             </section>
 
         </main>
+    </div>
+
+    <div id="batch-action-bar" class="batch-action-bar hidden">
+        <div class="batch-count"><span id="selected-count">0</span> items selected</div>
+        <div class="batch-buttons">
+            <button id="btn-batch-select-all" class="btn-secondary" title="Select all visible items">Select All</button>
+            <button id="btn-batch-tag" class="btn-primary" title="Add or remove tags from selected">🏷️ Tag</button>
+            <button id="btn-batch-delete" class="btn-danger" title="Delete selected items">🗑️ Delete</button>
+            <button id="btn-batch-cancel" class="btn-secondary">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Batch Tag Modal -->
+    <div id="batch-tag-modal" class="modal hidden">
+        <div class="modal-content">
+            <h3>Batch Tagging 🏷️</h3>
+            <p>Modify tags for <span id="batch-tag-count">0</span> items.</p>
+            
+            <div class="input-group">
+                <label>Add Tags (comma separated)</label>
+                <input type="text" id="batch-add-tags" placeholder="important, reference...">
+            </div>
+            
+            <div class="input-group">
+                <label>Remove Tags (comma separated)</label>
+                <input type="text" id="batch-remove-tags" placeholder="old, temporary...">
+            </div>
+
+            <div class="modal-actions">
+                <button id="btn-batch-tag-apply" class="btn-primary">Apply Changes</button>
+                <button id="btn-batch-tag-close" class="btn-secondary">Cancel</button>
+            </div>
+        </div>
     </div>
 
     <!-- Global Toast -->

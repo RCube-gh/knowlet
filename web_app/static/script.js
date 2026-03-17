@@ -12,29 +12,68 @@ let editSuggestionIndex = -1;
 let currentViewingNote = null; // Track current opened note
 let renderStackTags = null;
 let renderEditTags = null;
+let batchSelectedIds = new Set(); // Multi-selection state
+let isSelectMode = false;
+// Note: pendingSyncCount removed as we now use authoritative server status
 
 const switchView = (targetMode) => {
     const tabSearch = document.getElementById('tab-search');
     const viewBtns = document.querySelectorAll('.view-btn');
+    const zoomContainer = document.getElementById('grid-zoom-container');
     if (!tabSearch) return;
 
     // Remove existing layout classes
     tabSearch.classList.remove('is-grid', 'is-focus');
     viewBtns.forEach(b => b.classList.remove('active'));
 
+    // Handle Zoom slider visibility
     if (targetMode === 'grid') {
         tabSearch.classList.add('is-grid');
         const btn = document.getElementById('view-grid');
         if (btn) btn.classList.add('active');
+        if (zoomContainer) zoomContainer.classList.remove('hidden');
+        applyGridZoom(); // Apply the current zoom when entering grid
     } else if (targetMode === 'focus') {
         tabSearch.classList.add('is-focus');
         const btn = document.getElementById('view-focus');
         if (btn) btn.classList.add('active');
+        if (zoomContainer) zoomContainer.classList.add('hidden');
+        clearBatchSelection(); // Clear selection when leaving grid
     } else {
         const btn = document.getElementById('view-standard');
         if (btn) btn.classList.add('active');
+        if (zoomContainer) zoomContainer.classList.add('hidden');
+        clearBatchSelection();
     }
 };
+
+const applyGridZoom = () => {
+    const slider = document.getElementById('grid-zoom-slider');
+    const tabSearch = document.getElementById('tab-search');
+    if (!slider || !tabSearch) return;
+
+    const val = slider.value;
+    // We calculate height relative to width to keep aspect ratio decent
+    const height = Math.floor(val * 0.65); 
+    
+    tabSearch.style.setProperty('--grid-card-width', `${val}px`);
+    tabSearch.style.setProperty('--grid-card-height', `${height}px`);
+    
+    localStorage.setItem('knowlet_grid_zoom', val);
+};
+
+function setupGridZoom() {
+    const slider = document.getElementById('grid-zoom-slider');
+    if (!slider) return;
+
+    // Load saved zoom
+    const saved = localStorage.getItem('knowlet_grid_zoom');
+    if (saved) {
+        slider.value = saved;
+    }
+
+    slider.addEventListener('input', applyGridZoom);
+}
 
 document.addEventListener('DOMContentLoaded', () => {
     if (typeof markedKatex !== 'undefined') {
@@ -52,6 +91,13 @@ document.addEventListener('DOMContentLoaded', () => {
     setupPasteUpload();
     setupSettingsListeners();
     setupViewSwitcher();
+    setupGridZoom();
+    setupBatchActions();
+
+    const toggleSelectBtn = document.getElementById('btn-toggle-select');
+    if (toggleSelectBtn) {
+        toggleSelectBtn.addEventListener('click', toggleSelectMode);
+    }
     
     // Default focus
     document.getElementById('input-title').focus();
@@ -242,20 +288,58 @@ function setupTagManager(inputId, selectedContainerId, suggestionsId, stateArray
 
     input.addEventListener('keydown', (e) => {
         const items = suggBox.querySelectorAll('.suggestion-item');
-        if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            setSuggIdx((getSuggIdx() + 1) % items.length);
-            showSuggestions(input.value.trim());
-        } else if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            setSuggIdx((getSuggIdx() - 1 + items.length) % items.length);
-            showSuggestions(input.value.trim());
-        } else if (e.key === 'Enter') {
+        
+        // 1. Backspace: delete chip if input empty
+        if (e.key === 'Backspace' && input.value.length === 0) {
+            if (stateArray.length > 0) {
+                e.preventDefault();
+                e.stopPropagation();
+                stateArray.pop();
+                renderChips();
+            }
+            return;
+        }
+
+        // 2. Escape: hide suggestions
+        if (e.key === 'Escape' || e.key === 'Esc') {
+            if (!suggBox.classList.contains('hidden')) {
+                e.preventDefault();
+                e.stopPropagation();
+                suggBox.classList.add('hidden');
+            }
+            return;
+        }
+
+        // 3. Navigation: ArrowDown or Tab
+        if (e.key === 'ArrowDown' || (e.key === 'Tab' && !e.shiftKey)) {
+            if (!suggBox.classList.contains('hidden') && items.length > 0) {
+                e.preventDefault();
+                e.stopPropagation();
+                setSuggIdx((getSuggIdx() + 1) % items.length);
+                showSuggestions(input.value.trim());
+                return;
+            }
+        } 
+        // 4. Navigation: ArrowUp or Shift+Tab
+        else if (e.key === 'ArrowUp' || (e.key === 'Tab' && e.shiftKey)) {
+            if (!suggBox.classList.contains('hidden') && items.length > 0) {
+                e.preventDefault();
+                e.stopPropagation();
+                setSuggIdx((getSuggIdx() - 1 + items.length) % items.length);
+                showSuggestions(input.value.trim());
+                return;
+            }
+        } 
+        
+        // 5. Enter: select or add tag
+        if (e.key === 'Enter') {
             if (getSuggIdx() >= 0 && items[getSuggIdx()]) {
                 e.preventDefault();
+                e.stopPropagation();
                 items[getSuggIdx()].click();
             } else if (input.value.trim()) {
                 e.preventDefault();
+                e.stopPropagation();
                 const newTag = input.value.trim().replace(/^#/, '');
                 if (!stateArray.includes(newTag)) {
                     stateArray.push(newTag);
@@ -300,6 +384,7 @@ async function loadNotes(query = "") {
         const isIncomplete = !note.content;
         card.className = `note-card ${isIncomplete ? 'incomplete' : ''}`;
         card.setAttribute('tabindex', '0');
+        card.setAttribute('data-id', note.id); // Important for selection
         
         const tagsHtml = note.tags.slice(0, 3).map(t => `<span class="tag">#${t}</span>`).join('') + (note.tags.length > 3 ? '<span class="tag">...</span>' : '');
         let displayContent = note.content || "No content provided.";
@@ -307,6 +392,9 @@ async function loadNotes(query = "") {
         const titleHtml = note.title ? `<div class="note-title">${note.title}</div>` : '';
         
         card.innerHTML = `
+            <div class="note-select-wrap">
+                <input type="checkbox" class="batch-checkbox" ${batchSelectedIds.has(note.id) ? 'checked' : ''}>
+            </div>
             <div class="note-header">
                 ${titleHtml}
                 <span class="note-date">${dateStr}</span>
@@ -315,7 +403,14 @@ async function loadNotes(query = "") {
             <div class="note-tags">${tagsHtml}</div>
         `;
         
-        card.addEventListener('click', () => {
+        card.addEventListener('click', (e) => {
+            if (isSelectMode) {
+                const checkbox = card.querySelector('.batch-checkbox');
+                checkbox.checked = !checkbox.checked;
+                toggleBatchSelection(note.id, card, checkbox.checked);
+                return;
+            }
+
             document.querySelectorAll('.note-card').forEach(c => c.classList.remove('selected'));
             card.classList.add('selected');
             currentViewingNote = note;
@@ -327,7 +422,163 @@ async function loadNotes(query = "") {
             }
         });
 
+        // Prevent checkbox click from double-triggering card click
+        const checkbox = card.querySelector('.batch-checkbox');
+        checkbox.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleBatchSelection(note.id, card, checkbox.checked);
+        });
+
+        if (batchSelectedIds.has(note.id)) card.classList.add('batch-selected');
+
         container.appendChild(card);
+    });
+}
+
+function toggleSelectMode() {
+    isSelectMode = !isSelectMode;
+    const tabSearch = document.getElementById('tab-search');
+    const btn = document.getElementById('btn-toggle-select');
+    
+    if (isSelectMode) {
+        tabSearch.classList.add('is-select-mode');
+        btn.classList.add('active');
+        btn.textContent = "Exit Select";
+        showToast("Selection Mode ON 📁");
+    } else {
+        tabSearch.classList.remove('is-select-mode');
+        btn.classList.remove('active');
+        btn.textContent = "Select";
+        clearBatchSelection();
+    }
+}
+
+function toggleBatchSelection(id, card, isSelected) {
+    if (isSelected) {
+        batchSelectedIds.add(id);
+        if (card) card.classList.add('batch-selected');
+    } else {
+        batchSelectedIds.delete(id);
+        if (card) card.classList.remove('batch-selected');
+    }
+    updateBatchUI();
+}
+
+function updateBatchUI() {
+    const bar = document.getElementById('batch-action-bar');
+    const countEl = document.getElementById('selected-count');
+    const selectAllBtn = document.getElementById('btn-batch-select-all');
+    if (!bar || !countEl) return;
+
+    if (isSelectMode || batchSelectedIds.size > 0) {
+        bar.classList.remove('hidden');
+        countEl.textContent = batchSelectedIds.size;
+        
+        // Dynamic "Select All" button text
+        if (selectAllBtn) {
+            const cards = document.querySelectorAll('.note-card');
+            const allSelected = cards.length > 0 && batchSelectedIds.size === cards.length;
+            selectAllBtn.textContent = allSelected ? "Deselect All" : "Select All";
+        }
+    } else {
+        bar.classList.add('hidden');
+    }
+}
+
+function clearBatchSelection() {
+    batchSelectedIds.clear();
+    document.querySelectorAll('.note-card').forEach(c => {
+        c.classList.remove('batch-selected');
+        const cb = c.querySelector('.batch-checkbox');
+        if (cb) cb.checked = false;
+    });
+    updateBatchUI();
+}
+
+function setupBatchActions() {
+    const selectAllBtn = document.getElementById('btn-batch-select-all');
+    if (selectAllBtn) {
+        selectAllBtn.addEventListener('click', () => {
+            const cards = document.querySelectorAll('.note-card');
+            const allSelected = cards.length > 0 && batchSelectedIds.size === cards.length;
+
+            if (allSelected) {
+                clearBatchSelection();
+            } else {
+                cards.forEach(card => {
+                    const id = card.getAttribute('data-id');
+                    if (id) {
+                        const cb = card.querySelector('.batch-checkbox');
+                        if (cb) cb.checked = true;
+                        toggleBatchSelection(id, card, true);
+                    }
+                });
+            }
+        });
+    }
+
+    document.getElementById('btn-batch-cancel').addEventListener('click', toggleSelectMode);
+    
+    document.getElementById('btn-batch-delete').addEventListener('click', async () => {
+        if (batchSelectedIds.size === 0) return;
+        if (!confirm(`Are you sure you want to delete ${batchSelectedIds.size} stacks? 🗑️`)) return;
+
+        try {
+            const res = await fetch('/api/notes/batch-delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids: Array.from(batchSelectedIds) })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                showToast(`Deleted ${batchSelectedIds.size} items. ✨`);
+                const lastCount = batchSelectedIds.size;
+                clearBatchSelection();
+                toggleSelectMode();
+                loadNotes(document.getElementById('search-input').value);
+            }
+        } catch(err) { console.error(err); }
+    });
+
+    document.getElementById('btn-batch-tag').addEventListener('click', () => {
+        if (batchSelectedIds.size === 0) return;
+        document.getElementById('batch-tag-count').textContent = batchSelectedIds.size;
+        document.getElementById('batch-tag-modal').classList.remove('hidden');
+    });
+
+    document.getElementById('btn-batch-tag-close').addEventListener('click', () => {
+        document.getElementById('batch-tag-modal').classList.add('hidden');
+    });
+
+    document.getElementById('btn-batch-tag-apply').addEventListener('click', async () => {
+        const addStr = document.getElementById('batch-add-tags').value.trim();
+        const remStr = document.getElementById('batch-remove-tags').value.trim();
+        
+        const add_tags = addStr ? addStr.split(',').map(s => s.trim().replace(/^#/, '')) : [];
+        const remove_tags = remStr ? remStr.split(',').map(s => s.trim().replace(/^#/, '')) : [];
+
+        try {
+            const res = await fetch('/api/notes/batch-tag', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ids: Array.from(batchSelectedIds),
+                    add_tags,
+                    remove_tags
+                })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                showToast("Multi-tagging complete! 🏷️✨");
+                document.getElementById('batch-tag-modal').classList.add('hidden');
+                document.getElementById('batch-add-tags').value = '';
+                document.getElementById('batch-remove-tags').value = '';
+                clearBatchSelection();
+                toggleSelectMode();
+                loadNotes(document.getElementById('search-input').value);
+                fetchAllTags();
+            }
+        } catch(err) { console.error(err); }
     });
 }
 
@@ -368,14 +619,26 @@ function showDetail(note) {
             if (!pre.classList.contains('wrapped')) {
                 pre.classList.add('wrapped');
                 const wrapper = document.createElement('div');
-                wrapper.className = 'code-wrapper';
+                wrapper.className = 'code-block-wrapper';
                 pre.parentNode.insertBefore(wrapper, pre);
-                wrapper.appendChild(pre);
+
+                const header = document.createElement('div');
+                header.className = 'code-header';
+
+                const langLabel = document.createElement('span');
+                langLabel.className = 'code-lang';
+                const langClass = Array.from(block.classList).find(cls => cls.startsWith('language-'));
+                langLabel.textContent = langClass ? langClass.replace('language-', '') : 'text';
 
                 const copyBtn = document.createElement('button');
-                copyBtn.className = 'copy-code-btn';
+                copyBtn.className = 'btn-copy';
+                copyBtn.type = 'button';
                 copyBtn.textContent = 'Copy';
-                wrapper.appendChild(copyBtn);
+                header.appendChild(langLabel);
+                header.appendChild(copyBtn);
+
+                wrapper.appendChild(header);
+                wrapper.appendChild(pre);
 
                 copyBtn.addEventListener('click', () => {
                     navigator.clipboard.writeText(block.innerText);
@@ -427,6 +690,8 @@ async function stackNote() {
         if (renderStackTags) renderStackTags();
         showToast("Stacked successfully! ✨");
         document.getElementById('input-title').focus();
+        
+        const data = await res.json();
     } else {
         alert("保存に失敗しちゃった……！");
     }
@@ -544,8 +809,9 @@ async function renderSettingsTags() {
                         allKnownTags.delete(tag);
                         renderSettingsTags();
                         showToast(`Successfully deleted the tag "#${tag}". 🗑️✨`);
+                        updateSyncStatus(); // Fetch fresh status explicitly
                     }
-                } catch(err) { console.error('Failed to delete tag', err); }
+               } catch(err) { console.error('Failed to delete tag', err); }
             }
         });
         container.appendChild(div);
@@ -564,7 +830,61 @@ async function loadSyncSettings() {
         const data = await res.json();
         if (data.github_token) document.getElementById('setting-github-token').value = data.github_token;
         if (data.github_repo) document.getElementById('setting-github-repo').value = data.github_repo;
+        
+        updateSyncStatus(); // Load status too
     } catch(err) { console.error('Failed to load settings', err); }
+}
+
+async function updateSyncStatus(statusData = null) {
+    try {
+        const data = statusData || await (await fetch('/api/sync/status')).json();
+        const pending = data.pending_count;
+        const total = data.total_count;
+        const threshold = data.threshold || 50;
+        
+        // Update progress bar
+        const progressEl = document.getElementById('sync-progress');
+        const percentage = Math.min((pending / threshold) * 100, 100);
+        if (progressEl) {
+            progressEl.style.width = percentage + '%';
+            // Pulse if there are unsynced changes
+            if (data.has_unsynced_changes) progressEl.parentElement.classList.add('is-dirty');
+            else progressEl.parentElement.classList.remove('is-dirty');
+        }
+
+        // Update counts
+        const badge = document.getElementById('sync-badge');
+        if (badge) {
+            badge.textContent = pending;
+            badge.classList.toggle('hidden', pending === 0 && !data.has_unsynced_changes);
+        }
+
+        const countText = document.getElementById('sync-count-text');
+        if (countText) {
+            if (pending === 0 && data.has_unsynced_changes) {
+                countText.textContent = `Internal changes pending (Threshold: ${threshold})`;
+            } else {
+                countText.textContent = `${pending} unsynced changes (Threshold: ${threshold})`;
+            }
+        }
+
+
+        // Update Last Success/Error Info
+        const infoEl = document.getElementById('sync-info-meta');
+        if (infoEl) {
+            let html = '';
+            if (data.last_success_at) {
+                const date = new Date(data.last_success_at).toLocaleString();
+                html += `<div class="last-success">Last Archive: ${date} ✅</div>`;
+            }
+            if (data.last_error) {
+                html += `<div class="last-error">Sync Issue: ${data.last_error} ⚠️</div>`;
+            } else if (data.has_unsynced_changes && pending < threshold) {
+                html += `<div class="sync-hint">Waiting for ${threshold} items to auto-archive... ⏳</div>`;
+            }
+            infoEl.innerHTML = html;
+        }
+    } catch(err) { console.error('Failed to update sync status', err); }
 }
 
 async function saveSyncSettings() {
@@ -596,22 +916,49 @@ async function pushToGithub() {
     const btn = document.getElementById('btn-sync-push');
     const originalText = btn.innerText;
     try {
-        btn.innerText = "⏳ Pushing...";
         btn.disabled = true;
-        const res = await fetch('/api/sync/push', { method: 'POST' });
-        if (res.ok) showToast("Successfully pushed to GitHub! ☁️🚀");
-        else alert("Push failed. Check your settings.");
+        btn.textContent = "Archiving...";
+        // Manual push is always forced to bypass threshold
+        const res = await fetch('/api/sync/push?force=true', { method: 'POST' });
+        const data = await res.json();
+
+        if (res.ok && data.status === 'success') {
+            showToast("Successfully archived to GitHub! ☁️✨");
+            updateSyncStatus();
+        } else {
+            const msg = data.message || data.detail || "Archive failed.";
+            if (data.status === 'skipped') {
+                showToast(`Skipped: ${msg} 💨`);
+            } else {
+                alert(`Archive failed: ${msg}`);
+            }
+        }
     } catch(err) {
         console.error('Sync failed', err);
-        alert("Network error during sync.");
+        alert("Network error during archive.");
     } finally {
-        btn.innerText = originalText;
         btn.disabled = false;
+        btn.textContent = "Push to GitHub";
     }
 }
 
 async function pullFromGithub() {
-    if (!confirm("Warning: This will overwrite ALL local data with the version from GitHub. Are you sure?")) return;
+    // 1. Check for pending changes first
+    try {
+        const statsRes = await fetch('/api/sync/status');
+        const stats = await statsRes.json();
+        
+        let warnMsg = "Warning: This will overwrite ALL local data with the version from GitHub. Are you sure?";
+        if (stats.has_unsynced_changes) {
+            warnMsg = `WAIT! You have uncommitted changes locally (Notes: ${stats.pending_count}).\n\n` + 
+                      `If you Pull now, these changes (including deletions) will be PERMANENTLY LOST.\n` +
+                      `Are you absolutely sure you want to overwrite?`;
+        }
+
+        if (!confirm(warnMsg)) return;
+    } catch(e) { /* ignore and fallback to simple confirms */ }
+
+
     const btn = document.getElementById('btn-sync-pull');
     const originalText = btn.innerText;
     try {
@@ -623,6 +970,7 @@ async function pullFromGithub() {
             renderSettingsTags();
             loadSyncSettings();
             loadStats();
+            updateSyncStatus(); // Explicit refresh
         } else alert("Pull failed. Check your settings.");
     } catch(err) {
         console.error('Sync failed', err);
@@ -662,6 +1010,7 @@ function setupDetailEditor() {
     const btnEdit = document.getElementById('btn-edit');
     const btnCancel = document.getElementById('btn-cancel-edit');
     const btnSave = document.getElementById('btn-save-edit');
+    const btnDelete = document.getElementById('btn-delete-note'); // Assuming a delete button exists
     const editActions = document.getElementById('edit-actions-inline');
 
     btnEdit.addEventListener('click', () => {
@@ -704,7 +1053,7 @@ function setupDetailEditor() {
             const savedNote = await res.json();
             currentViewingNote = savedNote;
             showDetail(savedNote);
-            showToast("Stack updated! ✨");
+            showToast("Updated successfully! ✨");
             loadNotes(document.getElementById('search-input').value);
         } else { alert("Failed to save changes."); }
     });
