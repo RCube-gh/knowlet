@@ -74,6 +74,11 @@
                     <div class="search-box">
                         <input type="text" id="search-input" placeholder="Search knowledge...">
                     </div>
+                    <div class="view-switcher">
+                        <button id="view-standard" class="view-btn active" title="Standard View">📝</button>
+                        <button id="view-grid" class="view-btn" title="Grid View">🗂️</button>
+                        <button id="view-focus" class="view-btn" title="Focus View">🔍</button>
+                    </div>
                     <button id="btn-export" class="btn-secondary">Export CSV</button>
                 </div>
                 
@@ -100,7 +105,8 @@
                                     <input type="text" id="edit-title" class="seamless-input hidden" placeholder="Title">
                                     <span id="detail-date" class="note-date"></span>
                                 </div>
-                                <div class="detail-header-actions">
+                                <div class="detail-header-actions" style="display: flex; gap: 8px; align-items: center;">
+                                    <button id="btn-back-to-list" class="btn-secondary small-btn hidden">← Back</button>
                                     <button id="btn-edit" class="btn-secondary small-btn">✏️ Edit</button>
                                     <div id="edit-actions-inline" class="hidden" style="display: flex; gap: 8px;">
                                         <button id="btn-cancel-edit" class="btn-secondary small-btn">Cancel</button>

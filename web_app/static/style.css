@@ -258,6 +258,36 @@ body {
     flex: 1;
 }
 
+.view-switcher {
+    display: flex;
+    background: var(--bg-input);
+    padding: 4px;
+    border-radius: 10px;
+    gap: 4px;
+}
+
+.view-btn {
+    background: transparent;
+    border: none;
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 1.1rem;
+    transition: all 0.2s;
+    opacity: 0.6;
+}
+
+.view-btn:hover {
+    background: rgba(25, 118, 210, 0.1);
+    opacity: 1;
+}
+
+.view-btn.active {
+    background: var(--bg-card);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    opacity: 1;
+}
+
 .filters-area-horizontal input {
     width: 100%;
     padding: 12px 15px;
@@ -276,6 +306,18 @@ body {
     gap: 20px;
     height: calc(100vh - 60px);
     overflow-y: auto;
+}
+
+/* Hide main scroll when searching to use split-view inner scrolls, 
+   but Restore it for Focus Mode document-like feel */
+#tab-search.is-focus {
+    overflow-y: auto;
+    height: calc(100vh - 60px);
+}
+
+#tab-search.is-focus .search-split-layout {
+    height: auto;
+    overflow-y: visible;
 }
 
 .main-content::-webkit-scrollbar {
@@ -581,6 +623,68 @@ button {
     align-items: flex-start;
 }
 
+/* --- Dynamic View Modes --- */
+
+/* 1. Grid Mode */
+#tab-search.is-grid .search-split-layout {
+    display: block;
+    overflow-y: auto;
+}
+
+#tab-search.is-grid .search-detail-column {
+    display: none !important;
+}
+
+#tab-search.is-grid .search-list-column {
+    padding-right: 0;
+}
+
+#tab-search.is-grid .notes-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+    overflow-y: visible;
+}
+
+#tab-search.is-grid .note-card {
+    height: 180px;
+    display: flex;
+    flex-direction: column;
+}
+
+#tab-search.is-grid .note-content {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
+    -webkit-box-orient: vertical;
+    flex: 1;
+}
+
+/* 2. Focus Mode */
+#tab-search.is-focus .search-list-column {
+    display: none !important;
+}
+
+#tab-search.is-focus .search-detail-column {
+    flex: 1;
+    max-width: 1000px;
+    margin: 0 auto;
+    background: transparent;
+    border: none;
+    padding: 40px 20px;
+    height: auto;
+    overflow-y: visible;
+}
+
+#tab-search.is-focus .btn-back-to-list {
+    display: inline-block !important;
+}
+
+#tab-search.is-focus .detail-header {
+    margin-bottom: 30px;
+}
+
 .detail-header-text {
     flex: 1;
 }
@@ -683,15 +787,30 @@ button {
     transition: all 0.2s;
 }
 
-.note-card:hover, .note-card.selected {
+.note-card:hover {
     background: var(--bg-input);
     transform: translateX(4px);
     border-color: var(--primary);
 }
 
+.note-card.selected {
+    background: rgba(25, 118, 210, 0.08); /* Light blue tint */
+    border-color: var(--primary);
+    border-left-width: 8px; /* Double thick accent */
+    box-shadow: 0 4px 15px rgba(25, 118, 210, 0.15); /* Soft glow */
+    outline: 2px solid rgba(25, 118, 210, 0.2);
+}
+
 .note-card.incomplete {
     border-left: 4px solid #F57F17;
     background: #FFF8E1;
+}
+
+.note-card.incomplete.selected {
+    background: #FFF0C1; /* A bit deeper yellow/orange for selected state */
+    border-left-color: #E65100; /* Darker orange for accent */
+    border-left-width: 8px; /* Consistent with other selected cards */
+    outline: 2px solid rgba(245, 127, 23, 0.3);
 }
 
 .note-header {
