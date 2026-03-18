@@ -734,16 +734,83 @@ async function loadStats() {
         document.getElementById('streak-count').textContent = streak;
 
         renderHeatmap(dayCounts);
+        renderGrowthChart(notes);
     } catch(err) {
         console.error('Failed to load stats', err);
     }
+}
+
+let growthChartInstance = null;
+function renderGrowthChart(notes) {
+    const ctx = document.getElementById('growthChart');
+    if (!ctx) return;
+
+    const countsByDate = {};
+    notes.forEach(n => {
+        const date = n.created_at.split('T')[0];
+        countsByDate[date] = (countsByDate[date] || 0) + 1;
+    });
+
+    const sortedDates = Object.keys(countsByDate).sort();
+    
+    let cumulative = 0;
+    const chartData = sortedDates.map(date => {
+        cumulative += countsByDate[date];
+        return { x: date, y: cumulative };
+    });
+
+    if (growthChartInstance) {
+        growthChartInstance.destroy();
+    }
+
+    growthChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            datasets: [{
+                label: 'Total Knowledge Stacks',
+                data: chartData,
+                borderColor: '#1e88e5',
+                backgroundColor: 'rgba(30, 136, 229, 0.1)',
+                borderWidth: 3,
+                pointRadius: 2,
+                pointHoverRadius: 6,
+                fill: true,
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    type: 'category',
+                    title: { display: true, text: 'Date', color: '#546e7a' },
+                    grid: { display: false }
+                },
+                y: {
+                    beginAtZero: true,
+                    title: { display: true, text: 'Cumulative Total', color: '#546e7a' },
+                    ticks: { precision: 0 }
+                }
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    backgroundColor: '#0d47a1',
+                    titleFont: { weight: 'bold' }
+                }
+            }
+        }
+    });
 }
 
 function renderHeatmap(dayCounts) {
     const container = document.getElementById('heatmap');
     container.innerHTML = '';
     
-    const weeksToShow = 20; 
+    const weeksToShow = 53; // Show a full year like GitHub
     const now = new Date();
     const endDate = new Date(now);
     endDate.setDate(now.getDate() + (6 - now.getDay()));

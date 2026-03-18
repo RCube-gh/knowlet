@@ -570,4 +570,6 @@ def serve_index():
     return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=48291)
+    host = os.getenv("KNOWLET_HOST", "0.0.0.0")
+    port = int(os.getenv("KNOWLET_PORT", 48291))
+    uvicorn.run(app, host=host, port=port)
