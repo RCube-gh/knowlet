@@ -1,0 +1,16 @@
+services:
+  knowlet:
+    build: .
+    container_name: knowlet-app
+    ports:
+      - "48291:48291"
+    volumes:
+      # Map the database file to persist the knowledge stacks
+      - ./data.db:/app/data.db
+      # Map the uploads directory for any images
+      - ./static/uploads:/app/static/uploads
+    restart: unless-stopped
+    # Optional: Use environment variables for GitHub settings if you want to avoid manual setup
+    # environment:
+    #   - GITHUB_TOKEN=your_token_here
+    #   - GITHUB_REPO=your_repo_here
